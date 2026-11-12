@@ -271,7 +271,7 @@ export function buildExternalSubconverterUrl({
     } else if (requestUrl) {
         // 兜底保留旧回调 URL 逻辑，避免异常空列表场景构造无效 converter 请求。
         const dataSourceUrl = new URL(requestUrl);
-        const paramsToClear = ['target', 'engine', 'builtin', 'clash', 'singbox', 'surge', 'loon', 'quanx', 'egern', 'base64', 'v2ray', 'trojan', 'list', 'include', 'exclude'];
+        const paramsToClear = ['target', 'engine', 'builtin', 'clash', 'singbox', 'surge', 'loon', 'quanx', 'egern', 'base64', 'v2ray', 'trojan', 'list', 'include', 'exclude', 'dns_reuse', 'dns-reuse'];
         paramsToClear.forEach(p => dataSourceUrl.searchParams.delete(p));
         dataSourceUrl.searchParams.set('target', 'nodes');
         dataSourceUrl.searchParams.set('builtin', 'true');
@@ -294,7 +294,25 @@ export function buildExternalSubconverterUrl({
 
     const externalTemplateConfigUrl = resolveExternalTemplateConfigUrl(templateSource);
     if (externalTemplateConfigUrl) {
-        externalUrl.searchParams.set('config', externalTemplateConfigUrl);
+        let configUrl = externalTemplateConfigUrl;
+
+        // 只转发允许的模板选项，避免将订阅令牌等参数泄露给模板服务。
+        const rawDnsReuse = params.get('dns_reuse') ?? params.get('dns-reuse');
+        const normalizedDnsReuse = rawDnsReuse?.trim().toLowerCase();
+        const booleanValues = new Map([
+            ['1', '1'], ['true', '1'], ['yes', '1'], ['on', '1'],
+            ['0', '0'], ['false', '0'], ['no', '0'], ['off', '0']
+        ]);
+
+        // 有效请求参数覆盖模板默认值；未提供或非法值保留模板原设置。
+        if (booleanValues.has(normalizedDnsReuse)) {
+            const templateUrl = new URL(configUrl);
+            templateUrl.searchParams.delete('dns-reuse');
+            templateUrl.searchParams.set('dns_reuse', booleanValues.get(normalizedDnsReuse));
+            configUrl = templateUrl.toString();
+        }
+
+        externalUrl.searchParams.set('config', configUrl);
     }
 
     externalUrl.searchParams.set('filename', subName);
